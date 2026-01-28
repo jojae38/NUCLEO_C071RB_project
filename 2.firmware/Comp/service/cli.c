@@ -6,6 +6,7 @@
  */
 
 #include "cli.h"
+#include "RFID.h"
 #include "_uart.h"
 
 #ifdef _USE_HW_CLI
@@ -99,6 +100,9 @@ static float    cliArgsGetFloat(uint8_t index);
 static char    *cliArgsGetStr(uint8_t index);
 static bool     cliArgsIsStr(uint8_t index, char *p_str);
 
+void cliRfidSend(cli_args_t *args);
+void cliRfidRead(cli_args_t *args);
+
 bool cliInit(void)
 {
   cli_node.is_open = false;
@@ -118,6 +122,8 @@ bool cliInit(void)
   cliLineClean(&cli_node);
 
   cliAdd("help", cliShowList);
+  cliAdd("RSEND", cliRfidSend);
+  cliAdd("RREAD", cliRfidRead);
 
   cliOpen(_DEF_UART1_CLI, 115200);
   delay(100);
@@ -737,6 +743,24 @@ void cliShowList(cli_args_t *args)
   cliPrintf("-----------------------------\r\n");
 }
 
+void cliRfidSend(cli_args_t *args)
+{
+  uint8_t buffer = 0x04;
+  HAL_StatusTypeDef ret;
+  ret = rfidSpiTransmit(IO_CONFIGURATION_REG_01, &buffer, 1);
+  if(ret == HAL_OK)
+    cliPrintf("-----------------------------\r\n");
+}
+
+void cliRfidRead(cli_args_t *args)
+{
+  uint8_t buffer = 0;
+  HAL_StatusTypeDef ret;
+  ret = rfidSpiReceive(MODE_DEFINITION_REG, &buffer, 1);
+  cliPrintf("0x%02X\n", buffer);
+  if(ret == HAL_OK)
+    cliPrintf("-----------------------------\r\n");
+}
 
 //void cliMemoryDump(cli_args_t *args)
 //{

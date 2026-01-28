@@ -12,6 +12,7 @@
 #include "stm32c071xx.h"
 #include "stm32c0xx_hal.h"
 #include "stm32c0xx.h"
+#include "stm32c0xx_it.h"
 
 void vectorInit(void);
 void delay(uint32_t ms);
