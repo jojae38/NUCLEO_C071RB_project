@@ -14,6 +14,8 @@ typedef struct {
   SPI_HandleTypeDef* SPI_HANDLER;
   GPIO_TypeDef* NSS_PORT;
   uint16_t      NSS_PIN;
+  bool          isinit;
+
 }RFID_tbl_t;
 
 typedef enum {
@@ -24,9 +26,10 @@ typedef enum {
   BIT_RATE_DEFINITION_REG = 0x04,
 
 
-
+  IC_IDENTITY             = 0x3F,
 }RFID_REG;
 
+#define ST25R3916B_IC_IDENTITY  0x31
 
 void rfidInit(void);
 void rfidMain(void);

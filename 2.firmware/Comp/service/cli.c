@@ -745,21 +745,66 @@ void cliShowList(cli_args_t *args)
 
 void cliRfidSend(cli_args_t *args)
 {
-  uint8_t buffer = 0x04;
-  HAL_StatusTypeDef ret;
-  ret = rfidSpiTransmit(IO_CONFIGURATION_REG_01, &buffer, 1);
-  if(ret == HAL_OK)
-    cliPrintf("-----------------------------\r\n");
+  uint8_t tmp_addr;
+  uint8_t buffer;
+  char *endptr;
+
+  if (args->argc != 2)
+  {
+      cliPrintf("Usage: rfid send <hex>\r\n");
+      return;
+  }
+
+  unsigned long val1 = strtoul(args->argv[1], &endptr, 16); // ★ base=16 고정
+
+  if (*endptr != '\0' || val1 > 0xFF)
+  {
+      cliPrintf("Invalid hex\r\n");
+      return;
+  }
+
+  tmp_addr = (uint8_t)val1;
+
+  unsigned long val2 = strtoul(args->argv[1], &endptr, 16); // ★ base=16 고정
+
+  if (*endptr != '\0' || val2 > 0xFF)
+  {
+      cliPrintf("Invalid hex\r\n");
+      return;
+  }
+
+  buffer = (uint8_t)val2;
+
+  rfidSpiTransmit(tmp_addr, &buffer, 1);
 }
 
 void cliRfidRead(cli_args_t *args)
 {
-  uint8_t buffer = 0;
-  HAL_StatusTypeDef ret;
-  ret = rfidSpiReceive(MODE_DEFINITION_REG, &buffer, 1);
-  cliPrintf("0x%02X\n", buffer);
-  if(ret == HAL_OK)
-    cliPrintf("-----------------------------\r\n");
+  uint8_t tmp_addr;
+  uint8_t buffer[20];
+  memset(buffer,0,20);
+  char *endptr;
+
+  if (args->argc != 1)
+  {
+      cliPrintf("Usage: rfid send <hex>\r\n");
+      return;
+  }
+
+
+  unsigned long val = strtoul(args->argv[1], &endptr, 16); // ★ base=16 고정
+
+  if (*endptr != '\0' || val > 0xFF)
+  {
+      cliPrintf("Invalid hex\r\n");
+      return;
+  }
+
+  tmp_addr = (uint8_t)val;
+
+  rfidSpiReceive(tmp_addr, buffer, 1);
+
+  cliPrintf("0x%02X",buffer[0]);
 }
 
 //void cliMemoryDump(cli_args_t *args)

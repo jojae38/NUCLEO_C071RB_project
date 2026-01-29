@@ -7,19 +7,22 @@
 
 #include "RFID.h"
 
+#define DEFAULT_RFID_TIMEOUT 500
+
 extern SPI_HandleTypeDef hspi1;
 
 RFID_tbl_t RFID_tbl = {
     .SPI_HANDLER = &hspi1,
     .NSS_PORT = SPI1_NSS_GPIO_Port,
-    .NSS_PIN = SPI1_NSS_Pin
+    .NSS_PIN = SPI1_NSS_Pin,
+    .isinit = false,
 };
 
-static inline uint8_t st25_cmd_wr(uint8_t addr) { return (uint8_t)(0x00 | (addr & 0x3F)); }
-static inline uint8_t st25_cmd_rd(uint8_t addr) { return (uint8_t)(0x40 | (addr & 0x3F)); }
+uint8_t st25_cmd_wr(uint8_t addr) { return (uint8_t)(0x00 | (addr & 0x3F)); }
+uint8_t st25_cmd_rd(uint8_t addr) { return (uint8_t)(0x40 | (addr & 0x3F)); }
 
-static inline void BSS_L(void){ HAL_GPIO_WritePin(RFID_tbl.NSS_PORT, RFID_tbl.NSS_PIN, GPIO_PIN_RESET); }
-static inline void BSS_H(void){ HAL_GPIO_WritePin(RFID_tbl.NSS_PORT, RFID_tbl.NSS_PIN, GPIO_PIN_SET); }
+void BSS_L(void){ HAL_GPIO_WritePin(RFID_tbl.NSS_PORT, RFID_tbl.NSS_PIN, GPIO_PIN_RESET); }
+void BSS_H(void){ HAL_GPIO_WritePin(RFID_tbl.NSS_PORT, RFID_tbl.NSS_PIN, GPIO_PIN_SET); }
 
 
 HAL_StatusTypeDef rfidSpiTransmit(uint8_t address, uint8_t* pdata, uint8_t len)
@@ -33,31 +36,52 @@ HAL_StatusTypeDef rfidSpiTransmit(uint8_t address, uint8_t* pdata, uint8_t len)
   uint8_t wr_addr = st25_cmd_wr(address);
 
   send_buffer[0] = wr_addr;
-  memcpy(&send_buffer[1],pdata,len);
-//  status = HAL_SPI_Transmit(RFID_tbl.SPI_HANDLER, &wr_addr, 1, 100);
-//  if(status == HAL_OK) status = HAL_SPI_Transmit(&hspi1, pdata, len, 500);
 
-  status = HAL_SPI_Transmit(RFID_tbl.SPI_HANDLER, send_buffer, len + 1, 500);
+  memcpy(&send_buffer[1],pdata,len);
+  status = HAL_SPI_Transmit(RFID_tbl.SPI_HANDLER, send_buffer, len + 1, DEFAULT_RFID_TIMEOUT);
   BSS_H();
 
   return status;
 }
+
 
 HAL_StatusTypeDef rfidSpiReceive(uint8_t address, uint8_t* pdata, uint8_t len)
 {
   if(len == 0) return HAL_ERROR;
   BSS_L();
   HAL_StatusTypeDef status = HAL_OK;
-  uint8_t rd_addr = st25_cmd_wr(address);
+  uint8_t rd_addr = st25_cmd_rd(address);
   status = HAL_SPI_Transmit(RFID_tbl.SPI_HANDLER, &rd_addr, 1, 100);
-  if(status == HAL_OK) status = HAL_SPI_Receive(&hspi1, pdata, len, 500);
+  if(status == HAL_OK) status = HAL_SPI_Receive(RFID_tbl.SPI_HANDLER, pdata, len, 500);
+
+//  status = HAL_SPI_TransmitReceive(RFID_tbl.SPI_HANDLER, &rd_addr, pdata, len, DEFAULT_RFID_TIMEOUT);
   BSS_H();
   return status;
 }
 
+
 void rfidInit(void)
 {
+  uint8_t buffer[20];
+  memset(buffer,0,20);
+  RFID_tbl.isinit = true;
 
+//ID 확인 - 통신 확인
+  if(rfidSpiReceive(IC_IDENTITY, buffer, 1) == HAL_OK)
+  {
+    if(buffer[0] != 0x31) goto error;
+  }
+  else goto error;
+
+//설정 변경
+
+
+
+  return;
+
+error:
+  RFID_tbl.isinit = false;
+  return;
 }
 
 void rfidMain(void)
