@@ -755,7 +755,7 @@ void cliRfidSend(cli_args_t *args)
       return;
   }
 
-  unsigned long val1 = strtoul(args->argv[1], &endptr, 16); // ★ base=16 고정
+  unsigned long val1 = strtoul(args->argv[0], &endptr, 16); // ★ base=16 고정
 
   if (*endptr != '\0' || val1 > 0xFF)
   {
@@ -792,7 +792,7 @@ void cliRfidRead(cli_args_t *args)
   }
 
 
-  unsigned long val = strtoul(args->argv[1], &endptr, 16); // ★ base=16 고정
+  unsigned long val = strtoul(args->argv[0], &endptr, 16); // ★ base=16 고정
 
   if (*endptr != '\0' || val > 0xFF)
   {
