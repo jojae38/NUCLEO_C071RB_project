@@ -17,8 +17,10 @@ RFID_tbl_t RFID_tbl = {
     .NSS_PORT = SPI1_NSS_GPIO_Port,
     .NSS_PIN = SPI1_NSS_Pin,
     .isinit = false,
+    .FIFO_LEN = 0,
 };
 
+uint8_t st25_cmd_fifo(uint8_t addr) { return (uint8_t)(0x80 | (addr & 0x3F)); }
 uint8_t st25_cmd_dr(uint8_t addr) { return (uint8_t)(0xC0 | (addr & 0x3F)); }
 uint8_t st25_cmd_wr(uint8_t addr) { return (uint8_t)(0x00 | (addr & 0x3F)); }
 uint8_t st25_cmd_rd(uint8_t addr) { return (uint8_t)(0x40 | (addr & 0x3F)); }
@@ -46,6 +48,20 @@ HAL_StatusTypeDef rfidSpiTransmit(uint8_t address, uint8_t* pdata, uint8_t len)
   return status;
 }
 
+HAL_StatusTypeDef rfidSpiReceive(uint8_t address, uint8_t* pdata, uint8_t len)
+{
+  if(len == 0) return HAL_ERROR;
+  BSS_L();
+  HAL_StatusTypeDef status = HAL_OK;
+  uint8_t rd_addr = st25_cmd_rd(address);
+  status = HAL_SPI_Transmit(RFID_tbl.SPI_HANDLER, &rd_addr, 1, 100);
+  if(status == HAL_OK) status = HAL_SPI_Receive(RFID_tbl.SPI_HANDLER, pdata, len, 500);
+
+//  status = HAL_SPI_TransmitReceive(RFID_tbl.SPI_HANDLER, &rd_addr, pdata, len, DEFAULT_RFID_TIMEOUT);
+  BSS_H();
+  return status;
+}
+
 HAL_StatusTypeDef rfidSpiDrTransmit(uint8_t address, uint8_t len)
 {
   if(len == 0) return HAL_ERROR;
@@ -60,18 +76,17 @@ HAL_StatusTypeDef rfidSpiDrTransmit(uint8_t address, uint8_t len)
   return status;
 }
 
-
-HAL_StatusTypeDef rfidSpiReceive(uint8_t address, uint8_t* pdata, uint8_t len)
+HAL_StatusTypeDef rfidSpiFifoReceive(uint8_t len)
 {
   if(len == 0) return HAL_ERROR;
+
   BSS_L();
   HAL_StatusTypeDef status = HAL_OK;
-  uint8_t rd_addr = st25_cmd_rd(address);
-  status = HAL_SPI_Transmit(RFID_tbl.SPI_HANDLER, &rd_addr, 1, 100);
-  if(status == HAL_OK) status = HAL_SPI_Receive(RFID_tbl.SPI_HANDLER, pdata, len, 500);
+  uint8_t fifo_addr = st25_cmd_fifo(FIFO_READ);
 
-//  status = HAL_SPI_TransmitReceive(RFID_tbl.SPI_HANDLER, &rd_addr, pdata, len, DEFAULT_RFID_TIMEOUT);
+  status = HAL_SPI_Receive(RFID_tbl.SPI_HANDLER, &fifo_addr, len, DEFAULT_RFID_TIMEOUT);
   BSS_H();
+
   return status;
 }
 
@@ -101,16 +116,31 @@ void rfidInit(void)
   data = OPERATION_CONTROL_REG_DATA;
   if(rfidSpiTransmit(OPERATION_CONTROL_REG, &data, 1) != HAL_OK) goto error;
 
+  delay(10);
+  //오실레이터 확인
+  if(rfidSpiReceive(AUXILIARY_DISPLAY_REG,&data,1)!= HAL_OK) goto error;;
+  if(data != AUXILIARY_DISPLAY_REG_EXPECT) goto error;
+
+  data = MODE_DEFINITION_REG_DATA;
+  if(rfidSpiTransmit(MODE_DEFINITION_REG, &data, 1) != HAL_OK) goto error;
+
+  data = BIT_RATE_DEFINITION_REG_DATA;
+  if(rfidSpiTransmit(BIT_RATE_DEFINITION_REG, &data, 1) != HAL_OK) goto error;
   if(rfidSpiDrTransmit(STOP_ALL_ACTIVITIES, 1) != HAL_OK) goto error;
   if(rfidSpiDrTransmit(RESET_RX_GAIN, 1) != HAL_OK) goto error;
-  delay(10);
+  if(rfidSpiDrTransmit(NFC_INITIAL_FIELD_ON, 1) != HAL_OK) goto error;
 
-  cliPrintf("RFID INIT SUCCESS\n");
+
+//  delay(10);
+//  if(rfidSpiDrTransmit(TRANSMIT_REQA, 1) != HAL_OK) goto error;
+
+
+  cliPrintf("RFID INIT SUCCESS\r\n");
   return;
 
 error:
   RFID_tbl.isinit = false;
-  cliPrintf("RFID INIT FAILED\n");
+  cliPrintf("RFID INIT FAILED\r\n");
   return;
 }
 
@@ -119,23 +149,72 @@ void rfidReset(void)
 
 }
 
+void rfidSendRequest(void)
+{
+  if(rfidSpiDrTransmit(TRANSMIT_REQA, 1) != HAL_OK)
+  {
+    cliPrintf("RFID ERROR\r\n");
+    rfidReset();
+  }
+  cliPrintf("REQUEST SEND\r\n");
+}
+
+void rfidClearFifo(void)
+{
+  if(rfidSpiDrTransmit(CLEAR_FIFO, 1) != HAL_OK)
+  {
+    cliPrintf("RFID ERROR\r\n");
+    rfidReset();
+  }
+  cliPrintf("CLEAR FIFO\r\n");
+}
+
+void rfidReadFifo(void)
+{
+  uint16_t fifo_len = rfidFifoAvailable();
+  if(fifo_len == 0)
+    return;
+  rfidSpiFifoReceive(fifo_len);
+}
+
+uint16_t rfidFifoAvailable(void)
+{
+  uint16_t ret = 0;
+  uint8_t buffer[2];
+  if(rfidSpiReceive(FIFO_STATUS_REG_02, &buffer[1],1) != HAL_OK)
+  {
+    cliPrintf("RFID ERROR\r\n");
+    rfidReset();
+  }
+  if(rfidSpiReceive(FIFO_STATUS_REG_01, &buffer[0],1) != HAL_OK)
+  {
+    cliPrintf("RFID ERROR\r\n");
+    rfidReset();
+  }
+  ret = ret | ((buffer[1] & 0xC0) << 2);
+  ret = ret | (uint16_t)buffer[0];
+
+  RFID_tbl.FIFO_LEN = ret;
+}
+
 bool init_timer = false;
 uint8_t timer = 0;
 void rfidMain(void)
 {
-  if(BSP_LED_GetState(LED_BLUE) == true)
-  {
-    if(init_timer == false)
-    {
-      init_timer = true;
-      timer = millis() + 500;
-    }
-  }
 
-  if(init_timer && timer - millis() < 0)
-  {
-    BSP_LED_Off(LED_BLUE);
-  }
+//  if(BSP_LED_GetState(LED_BLUE) == true)
+//  {
+//    if(init_timer == false)
+//    {
+//      init_timer = true;
+//      timer = millis() + 500;
+//    }
+//  }
+//
+//  if(init_timer && timer - millis() < 0)
+//  {
+//    BSP_LED_Off(LED_BLUE);
+//  }
 }
 
 

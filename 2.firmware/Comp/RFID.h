@@ -15,7 +15,7 @@ typedef struct {
   GPIO_TypeDef* NSS_PORT;
   uint16_t      NSS_PIN;
   bool          isinit;
-
+  uint16_t      FIFO_LEN;
 }RFID_tbl_t;
 
 typedef enum {
@@ -26,6 +26,11 @@ typedef enum {
   BIT_RATE_DEFINITION_REG = 0x04,
 
 
+  MAIN_INTERRUPT_REG      = 0x1A,
+
+  FIFO_STATUS_REG_01      = 0x1E,
+  FIFO_STATUS_REG_02      = 0x1F,
+  AUXILIARY_DISPLAY_REG   = 0x31,
   IC_IDENTITY             = 0x3F,
 }RFID_REG;
 
@@ -58,18 +63,40 @@ typedef enum{
   START_NO_RESPONSE_TIMER =     0xE3,
   START_PP_TIMER =              0xE4,
   STOP_NO_RESPONSE_TIMER =      0xE8,
-
+  TRIGGER_RC_CALIBRATION =      0xEA,
+  REGISTER_SPACE_B_ACCESS =     0xFB,
+  TEST_ACCESS =                 0xFC,
 }RFID_DM;
 
+//메인 인터럽트 플래그
+#define INT_FLAG_OSC  (1 << 7) //오실레이터 작동 시작
+#define INT_FLAG_WL   (1 << 6) //FIFO에 300이상 차 있을 경우
+#define INT_FLAG_RXS  (1 << 5) //받기 시작
+#define INT_FLAG_RXE  (1 << 4) //받기 끝
+#define INT_FLAG_TXE  (1 << 3) //통신 완료
+#define INT_FLAG_COL  (1 << 2) //충돌?
+#define INT_FLAG_RST  (1 << 1)
+
 #define ST25R3916B_IC_IDENTITY          0x31
+
+#define FIFO_LOAD                       0x00
+#define FIFO_READ                       0x1F
+
 #define IO_CONFIGURATION_REG_01_DATA    0x0C
 #define IO_CONFIGURATION_REG_02_DATA    0x84
 #define OPERATION_CONTROL_REG_DATA      0xC0
+#define MODE_DEFINITION_REG_DATA        0x09
+#define BIT_RATE_DEFINITION_REG_DATA    0x00
+
+#define AUXILIARY_DISPLAY_REG_EXPECT    0x10
 
 void rfidInit(void);
 void rfidMain(void);
 
 HAL_StatusTypeDef rfidSpiTransmit(uint8_t address, uint8_t* pdata, uint8_t len);
 HAL_StatusTypeDef rfidSpiReceive(uint8_t address, uint8_t* pdata, uint8_t len);
+HAL_StatusTypeDef rfidSpiDrTransmit(uint8_t address, uint8_t len);
+HAL_StatusTypeDef rfidSpiFifoReceive(uint8_t len);
+uint16_t rfidFifoAvailable(void);
 
 #endif /* RFID_H_ */
