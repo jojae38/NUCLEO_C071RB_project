@@ -16,6 +16,8 @@ typedef struct {
   uint16_t      NSS_PIN;
   bool          isinit;
   uint16_t      FIFO_LEN;
+  uint32_t      Int_status;
+  uint32_t      Int_mask;
 }RFID_tbl_t;
 
 typedef enum {
@@ -82,8 +84,8 @@ typedef enum{
 #define FIFO_LOAD                       0x00
 #define FIFO_READ                       0x1F
 
-#define IO_CONFIGURATION_REG_01_DATA    0x0C
-#define IO_CONFIGURATION_REG_02_DATA    0x84
+#define IO_CONFIGURATION_REG_01_DATA    0x04
+#define IO_CONFIGURATION_REG_02_DATA    0x9C
 #define OPERATION_CONTROL_REG_DATA      0xC0
 #define MODE_DEFINITION_REG_DATA        0x09
 #define BIT_RATE_DEFINITION_REG_DATA    0x00
@@ -96,7 +98,12 @@ void rfidMain(void);
 HAL_StatusTypeDef rfidSpiTransmit(uint8_t address, uint8_t* pdata, uint8_t len);
 HAL_StatusTypeDef rfidSpiReceive(uint8_t address, uint8_t* pdata, uint8_t len);
 HAL_StatusTypeDef rfidSpiDrTransmit(uint8_t address, uint8_t len);
-HAL_StatusTypeDef rfidSpiFifoReceive(uint8_t len);
+HAL_StatusTypeDef rfidSpiFifoReceive(uint8_t* pdata, uint8_t len);
 uint16_t rfidFifoAvailable(void);
+
+void rfidSendRequest(void);
+uint16_t rfidFifoAvailable(void);
+void rfidClearFifo(void);
+uint16_t rfidReadFifo(uint8_t * buffer);
 
 #endif /* RFID_H_ */

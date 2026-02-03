@@ -18,6 +18,8 @@ RFID_tbl_t RFID_tbl = {
     .NSS_PIN = SPI1_NSS_Pin,
     .isinit = false,
     .FIFO_LEN = 0,
+    .Int_status = 0,
+    .Int_mask = 0,
 };
 
 uint8_t st25_cmd_fifo(uint8_t addr) { return (uint8_t)(0x80 | (addr & 0x3F)); }
@@ -76,20 +78,62 @@ HAL_StatusTypeDef rfidSpiDrTransmit(uint8_t address, uint8_t len)
   return status;
 }
 
-HAL_StatusTypeDef rfidSpiFifoReceive(uint8_t len)
+HAL_StatusTypeDef rfidSpiFifoReceive(uint8_t* pdata, uint8_t len)
 {
   if(len == 0) return HAL_ERROR;
 
   BSS_L();
   HAL_StatusTypeDef status = HAL_OK;
   uint8_t fifo_addr = st25_cmd_fifo(FIFO_READ);
-
-  status = HAL_SPI_Receive(RFID_tbl.SPI_HANDLER, &fifo_addr, len, DEFAULT_RFID_TIMEOUT);
+  status = HAL_SPI_Transmit(RFID_tbl.SPI_HANDLER, &fifo_addr, 1, 100);
+  if(status == HAL_OK) status = HAL_SPI_Receive(RFID_tbl.SPI_HANDLER, pdata, len, DEFAULT_RFID_TIMEOUT);
   BSS_H();
 
   return status;
 }
 
+bool rfidCheckId(void)
+{
+  uint8_t ID;
+  bool ret = false;
+  if(rfidSpiReceive(IC_IDENTITY, &ID, 1) == HAL_OK)
+  {
+    if(ID == ST25R3916B_IC_IDENTITY)
+      ret = true;
+  }
+  return ret;
+}
+
+bool rfidCheckReg(uint8_t reg, uint8_t mask, uint8_t val)
+{
+  uint8_t regVal = 0;
+  rfidSpiReceive(reg, &regVal, 1);
+  return ((regVal & mask) == val);
+}
+
+void rfidDisableInterrupt(uint8_t reg)
+{
+}
+
+uint8_t rfidWaitInterruptsTimed(uint8_t reg, uint32_t timeout)
+{
+
+}
+
+uint8_t rfidGetInterrupt(uint8_t reg)
+{
+  uint8_t irqs;
+  if(irqs != 0x00)
+  {
+    RFID_tbl.Int_status &= ~irqs;
+  }
+  return irqs;
+}
+
+bool rfidOscOn(void)
+{
+
+}
 
 void rfidInit(void)
 {
@@ -98,20 +142,27 @@ void rfidInit(void)
   memset(buffer,0,20);
   RFID_tbl.isinit = true;
 
+//Set Default
+  if(rfidSpiDrTransmit(SET_DEFAULT, 1) != HAL_OK) goto error;
 
 //ID 확인 - 통신 확인
-  if(rfidSpiReceive(IC_IDENTITY, buffer, 1) == HAL_OK)
-  {
-    if(buffer[0] != ST25R3916B_IC_IDENTITY) goto error;
-  }
-  else goto error;
+  if(rfidCheckId() == false)
+    goto error;
 
-//설정 변경
+//인터럽트 초기화
+  RFID_tbl.Int_mask = 0;
+  RFID_tbl.Int_status = 0;
+
+//전압 레벨 변경
   data = IO_CONFIGURATION_REG_01_DATA;
   if(rfidSpiTransmit(IO_CONFIGURATION_REG_01, &data, 1) != HAL_OK) goto error;
 
+//SPI 속도 설정
   data = IO_CONFIGURATION_REG_02_DATA;
   if(rfidSpiTransmit(IO_CONFIGURATION_REG_02, &data, 1) != HAL_OK) goto error;
+
+//오실레이터 확인
+
 
   data = OPERATION_CONTROL_REG_DATA;
   if(rfidSpiTransmit(OPERATION_CONTROL_REG, &data, 1) != HAL_OK) goto error;
@@ -169,12 +220,13 @@ void rfidClearFifo(void)
   cliPrintf("CLEAR FIFO\r\n");
 }
 
-void rfidReadFifo(void)
+uint16_t rfidReadFifo(uint8_t * buffer)
 {
   uint16_t fifo_len = rfidFifoAvailable();
   if(fifo_len == 0)
-    return;
-  rfidSpiFifoReceive(fifo_len);
+    return 0;
+  rfidSpiFifoReceive(buffer, fifo_len);
+  return fifo_len;
 }
 
 uint16_t rfidFifoAvailable(void)
@@ -195,6 +247,7 @@ uint16_t rfidFifoAvailable(void)
   ret = ret | (uint16_t)buffer[0];
 
   RFID_tbl.FIFO_LEN = ret;
+  return ret;
 }
 
 bool init_timer = false;

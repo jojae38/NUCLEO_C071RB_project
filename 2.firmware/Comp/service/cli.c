@@ -103,6 +103,11 @@ static bool     cliArgsIsStr(uint8_t index, char *p_str);
 void cliRfidSend(cli_args_t *args);
 void cliRfidRead(cli_args_t *args);
 
+void cliRfidFifoRead(cli_args_t *args);
+void cliRfidRequ(cli_args_t *args);
+void cliRfidFifoCount(cli_args_t *args);
+
+
 bool cliInit(void)
 {
   cli_node.is_open = false;
@@ -124,6 +129,10 @@ bool cliInit(void)
   cliAdd("help", cliShowList);
   cliAdd("RSEND", cliRfidSend);
   cliAdd("RREAD", cliRfidRead);
+
+  cliAdd("RFIFOREAD", cliRfidFifoRead);
+  cliAdd("RFIFOREQU", cliRfidRequ);
+  cliAdd("RFIFOCOUNT", cliRfidFifoCount);
 
   cliOpen(_DEF_UART1_CLI, 115200);
   delay(100);
@@ -807,6 +816,35 @@ void cliRfidRead(cli_args_t *args)
   cliPrintf("0x%02X",buffer[0]);
 }
 
+
+void cliRfidFifoRead(cli_args_t *args)
+{
+  uint16_t size;
+  uint8_t buffer[512];
+  size = rfidReadFifo(buffer);
+
+  if(size > 0)
+  {
+    for(uint16_t i = 0; i<size;i++)
+    {
+      if(i%10 == 0)
+        cliPrintf("\r\n");
+      cliPrintf("0x%02X ",buffer[i]);
+    }
+  }
+}
+
+void cliRfidRequ(cli_args_t *args)
+{
+  rfidSendRequest();
+  cliPrintf("RFID_REQUEST");
+}
+
+void cliRfidFifoCount(cli_args_t *args)
+{
+  int ret = rfidFifoAvailable();
+  cliPrintf("Fifo Count : %d",ret);
+}
 //void cliMemoryDump(cli_args_t *args)
 //{
 //  int idx, size = 16;
